@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../widgets/user_form.dart';
 import '../widgets/result_card.dart';
+import '../services/user_service.dart';
 
 class JsonDemoPage extends StatefulWidget {
   const JsonDemoPage({super.key});
@@ -19,12 +20,19 @@ class _JsonDemoPageState extends State<JsonDemoPage> {
   final emailController = TextEditingController();
   final ageController = TextEditingController();
 
-  // Result information
+  // API service
+  final UserService userService = UserService();
+
+  // API result information
+  String apiMessage = '';
+  bool isLoading = false;
+
+  // Manual JSON result information
   String result = '';
   String jsonOutput = '';
   bool hasError = false;
 
-  // Handle JSON serialization
+  // Handle manual JSON serialization
   void createUser() {
     try {
       // Get information entered by the user
@@ -61,11 +69,94 @@ class _JsonDemoPageState extends State<JsonDemoPage> {
         jsonOutput = encodedJson;
       });
     } catch (e) {
-      // Handle serialization errors
       setState(() {
         hasError = true;
         result = 'JSON Serialization Failed!\n\n$e';
         jsonOutput = '';
+      });
+    }
+  }
+
+  // Retrieve user data from DummyJSON
+  Future<void> fetchUserFromApi() async {
+    setState(() {
+      isLoading = true;
+      apiMessage = 'Retrieving user from API...';
+    });
+
+    try {
+      final user = await userService.fetchUser();
+
+      if (!mounted) return;
+
+      setState(() {
+        nameController.text = user.name;
+        emailController.text = user.email;
+        ageController.text = user.age.toString();
+
+        apiMessage =
+            'Successfully retrieved user!\n\n'
+            'ID: ${user.id}\n'
+            'Name: ${user.name}\n'
+            'Email: ${user.email}\n'
+            'Age: ${user.age}';
+
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        apiMessage = 'API Error: $e';
+        isLoading = false;
+      });
+    }
+  }
+
+  // Send user data to DummyJSON
+  Future<void> sendUserToApi() async {
+    try {
+      final age = int.tryParse(ageController.text);
+
+      if (nameController.text.trim().isEmpty ||
+          emailController.text.trim().isEmpty ||
+          age == null) {
+        setState(() {
+          apiMessage =
+              'Please enter a name, email, and valid numeric age.';
+        });
+        return;
+      }
+
+      setState(() {
+        isLoading = true;
+        apiMessage = 'Sending user to API...';
+      });
+
+      final user = User(
+        nameController.text.trim(),
+        emailController.text.trim(),
+        age,
+      );
+
+      final response = await userService.createUser(user);
+
+      if (!mounted) return;
+
+      setState(() {
+        apiMessage =
+            'Successfully sent user!\n\n'
+            'Server Response:\n'
+            '${const JsonEncoder.withIndent('  ').convert(response)}';
+
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        apiMessage = 'API Error: $e';
+        isLoading = false;
       });
     }
   }
@@ -93,6 +184,7 @@ class _JsonDemoPageState extends State<JsonDemoPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // MANUAL JSON SECTION
             const Text(
               'Create a User',
               style: TextStyle(
@@ -109,7 +201,6 @@ class _JsonDemoPageState extends State<JsonDemoPage> {
 
             const SizedBox(height: 24),
 
-            // User input widget
             UserForm(
               nameController: nameController,
               emailController: emailController,
@@ -119,12 +210,73 @@ class _JsonDemoPageState extends State<JsonDemoPage> {
 
             const SizedBox(height: 24),
 
-            // Display serialization results
             ResultCard(
               result: result,
               jsonOutput: jsonOutput,
               hasError: hasError,
             ),
+
+            const SizedBox(height: 32),
+
+            const Divider(),
+
+            const SizedBox(height: 16),
+
+            // WEB API SECTION
+            const Text(
+              'Web API Integration',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            const Text(
+              'Retrieve user information from DummyJSON '
+              'or send your own user data to the API.',
+            ),
+
+            const SizedBox(height: 16),
+
+            ElevatedButton.icon(
+              onPressed:
+                  isLoading ? null : fetchUserFromApi,
+              icon: const Icon(Icons.download),
+              label: const Text('Fetch User from API'),
+            ),
+
+            const SizedBox(height: 8),
+
+            ElevatedButton.icon(
+              onPressed:
+                  isLoading ? null : sendUserToApi,
+              icon: const Icon(Icons.upload),
+              label: const Text('Send User to API'),
+            ),
+
+            const SizedBox(height: 16),
+
+            if (isLoading)
+              const Center(
+                child: CircularProgressIndicator(),
+              ),
+
+            if (apiMessage.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: SelectableText(
+                  apiMessage,
+                  style: const TextStyle(
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
